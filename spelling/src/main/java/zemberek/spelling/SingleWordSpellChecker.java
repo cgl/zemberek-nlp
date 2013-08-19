@@ -2,7 +2,6 @@ package zemberek.spelling;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
-import com.google.common.base.Stopwatch;
 import zemberek.core.DoubleValueSet;
 import zemberek.core.logging.Log;
 
@@ -10,7 +9,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class SingleWordSpellChecker {
@@ -284,7 +282,7 @@ public class SingleWordSpellChecker {
         }
     }
 
-    DoubleValueSet<String> decode(String input) {
+    public DoubleValueSet<String> decode(String input) {
         Hypothesis hyp = new Hypothesis(null, root, 0, Operation.N_A);
         DoubleValueSet<String> hypotheses = new DoubleValueSet<>();
         Set<Hypothesis> next = expand(hyp, input, hypotheses);
@@ -402,13 +400,13 @@ public class SingleWordSpellChecker {
 
 
     public static void main(String[] args) throws IOException {
-        SingleWordSpellChecker dt = new SingleWordSpellChecker(1.4, true);
+        SingleWordSpellChecker dt = new SingleWordSpellChecker(1, false);
         System.out.println("Loading vocabulary");
-        List<String> list = Files.readAllLines(new File("kelimeler").toPath(), Charsets.UTF_8);
+        List<String> list = Files.readAllLines(new File("/Users/cagil/Documents/allvoc.txt").toPath(), Charsets.UTF_8);
         System.out.println("Building tree");
         dt.buildDictionary(list);
         System.out.println("Tree is ready");
-
+        /*
         Random rnd = new Random(0xbeefcafe);
         List<String> testSet = new ArrayList<>();
 
@@ -416,21 +414,30 @@ public class SingleWordSpellChecker {
             testSet.add(list.get(rnd.nextInt(list.size())));
         }
 
-        testSet.add("hipermaretleri");
+
+        testSet.add("Lirasina");
+
         Stopwatch sw = new Stopwatch().start();
         int i = 0;
         System.out.println(testSet.size());
         for (String s : testSet) {
             //System.out.println(s);
             DoubleValueSet<String> res = dt.decode(dt.process(s));
-/*            for (String re : res) {
-                System.out.println(re + " " + res.getChild(re));
-            }*/
+            for (String re : res) {
+                System.out.println(re + " " + res.get(re));
+            }
             i = i + res.size();
         }
-        System.out.println("elapsed " + sw.elapsed(TimeUnit.MILLISECONDS));
+        */
 
-        System.out.println(i);
+        DoubleValueSet<String> res = dt.decode("fenerbahçem");
+        for (String re : res) {
+            System.out.println(re + " " + res.get(re));
+        }
+
+        //System.out.println("elapsed " + sw.elapsed(TimeUnit.MILLISECONDS));
+
+        //System.out.println(i);
     }
 
 
