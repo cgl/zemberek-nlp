@@ -1,22 +1,25 @@
 package zemberek.lm;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.*;
+import java.util.List;
+import java.util.Locale;
 
 public class LmVocabularyTest {
 
     @Test
     public void emptyVocabularyTest() throws IOException {
         LmVocabulary vocabulary = new LmVocabulary();
-        Assert.assertTrue(vocabulary.size() == 0);
+        Assert.assertTrue(vocabulary.size() == 3);
         Assert.assertEquals(
                 LmVocabulary.UNKNOWN_WORD + " " + LmVocabulary.UNKNOWN_WORD,
-                vocabulary.getWordsString(0, 0));
+                vocabulary.getWordsString(-1, -1));
     }
 
     @Test
@@ -28,22 +31,8 @@ public class LmVocabularyTest {
     @Test
     public void specialWordsTest() throws IOException {
         LmVocabulary vocabulary = new LmVocabulary("<S>", "Hello", "</S>");
-        Assert.assertEquals(0, vocabulary.getSentenceStartIndex());
-        Assert.assertEquals(2, vocabulary.getSentenceEndIndex());
-        Assert.assertEquals(-1, vocabulary.getUnknownWordIndex());
-
-        vocabulary = new LmVocabulary("<s>", "Hello", "</s>");
-        Assert.assertEquals(0, vocabulary.getSentenceStartIndex());
-        Assert.assertEquals(2, vocabulary.getSentenceEndIndex());
-        Assert.assertEquals(-1, vocabulary.getUnknownWordIndex());
-
-
-        vocabulary = new LmVocabulary("<s>", "<S>", "Hello", "</s>");
-        Assert.assertEquals(0, vocabulary.getSentenceStartIndex());
-        Assert.assertEquals(3, vocabulary.getSentenceEndIndex());
-        Assert.assertEquals(-1, vocabulary.getUnknownWordIndex());
+        vocabulary.containsAll("<s>", "Hello", "</s>", "<unk>");
     }
-
 
     @Test
     public void binaryFileGenerationTest() throws IOException {
@@ -78,11 +67,13 @@ public class LmVocabularyTest {
     }
 
     private void simpleCheck(LmVocabulary vocabulary) {
-        Assert.assertTrue(vocabulary.size() == 2);
-        Assert.assertEquals("Hello World", vocabulary.getWordsString(0, 1));
-        Assert.assertEquals("Hello " + LmVocabulary.UNKNOWN_WORD, vocabulary.getWordsString(0, 2));
-        Assert.assertEquals(0, vocabulary.indexOf("Hello"));
-        Assert.assertEquals(-1, vocabulary.indexOf("Foo"));
+        Assert.assertTrue(vocabulary.size() == 5);
+        Assert.assertEquals("Hello World",
+                vocabulary.getWordsString(vocabulary.toIndexes("Hello", "World")));
+        Assert.assertEquals("Hello " + LmVocabulary.UNKNOWN_WORD,
+                vocabulary.getWordsString(vocabulary.toIndexes("Hello", LmVocabulary.UNKNOWN_WORD)));
+        Assert.assertTrue(vocabulary.contains("Hello"));
+        Assert.assertEquals(vocabulary.getUnknownWordIndex(), vocabulary.indexOf("Foo"));
     }
 
     private File getBinaryVocFile() throws IOException {
@@ -112,11 +103,17 @@ public class LmVocabularyTest {
     @Test
     public void contains() throws IOException {
         LmVocabulary vocabulary = new LmVocabulary("Hello", "World");
-        Assert.assertTrue(vocabulary.contains(0));
-        Assert.assertTrue(vocabulary.contains(1));
-        Assert.assertFalse(vocabulary.contains(2));
-        Assert.assertTrue(vocabulary.containsAll(0, 1));
-        Assert.assertFalse(vocabulary.containsAll(0, 2));
+
+        int helloIndex = vocabulary.indexOf("Hello");
+        int worldIndex = vocabulary.indexOf("World");
+        Assert.assertTrue(vocabulary.contains(helloIndex));
+        Assert.assertTrue(vocabulary.contains(worldIndex));
+
+        int unkIndex = vocabulary.indexOf("Foo");
+        Assert.assertEquals(vocabulary.getUnknownWordIndex(), unkIndex);
+
+        Assert.assertTrue(vocabulary.containsAll(helloIndex, worldIndex));
+        Assert.assertFalse(vocabulary.containsAll(-1, 2));
 
         Assert.assertTrue(vocabulary.contains("Hello"));
         Assert.assertTrue(vocabulary.contains("World"));
@@ -136,15 +133,43 @@ public class LmVocabularyTest {
     @Test
     public void toWordsTest() throws IOException {
         LmVocabulary vocabulary = new LmVocabulary("a", "b", "c", "d", "e");
-        Assert.assertArrayEquals(new String[]{"a", "e", "b"}, vocabulary.toWords(0, 4, 1));
-        Assert.assertArrayEquals(new String[]{"a", LmVocabulary.UNKNOWN_WORD, "b"}, vocabulary.toWords(0, 5, 1));
+        int[] indexes = vocabulary.toIndexes("a", "e", "b");
+        Assert.assertEquals("a e b", Joiner.on(" ").join(vocabulary.toWords(indexes)));
+        indexes = vocabulary.toIndexes("a", "e", "foo");
+        Assert.assertEquals("a e <unk>", Joiner.on(" ").join(vocabulary.toWords(indexes)));
     }
 
     @Test
     public void toIndexTest() throws IOException {
         LmVocabulary vocabulary = new LmVocabulary("a", "b", "c", "d", "e");
-        Assert.assertArrayEquals(new int[]{0, 4, 1}, vocabulary.toIndexes("a", "e", "b"));
-        Assert.assertArrayEquals(new int[]{0, -1, 1}, vocabulary.toIndexes("a", "foo", "b"));
+
+        int[] indexes = {vocabulary.indexOf("a"), vocabulary.indexOf("e"), vocabulary.indexOf("b")};
+        Assert.assertArrayEquals(indexes, vocabulary.toIndexes("a", "e", "b"));
+
+        int[] indexes2 = {vocabulary.indexOf("a"), vocabulary.indexOf("<unk>"), vocabulary.indexOf("b")};
+        Assert.assertArrayEquals(indexes2, vocabulary.toIndexes("a", "foo", "b"));
     }
 
+    @Test
+    public void builderTest() throws IOException {
+        LmVocabulary.Builder builder = LmVocabulary.builder();
+        String[] words = {"elma", "çilek", "karpuz", "armut", "elma", "armut"};
+        for (String word : words) {
+            builder.add(word);
+        }
+        Assert.assertEquals(4, builder.size());
+        Assert.assertEquals(0, builder.indexOf("elma"));
+        Assert.assertEquals(1, builder.indexOf("çilek"));
+        Assert.assertEquals(2, builder.indexOf("karpuz"));
+        Assert.assertEquals(-1, builder.indexOf("mango"));
+
+        List<Integer> list = Lists.newArrayList(builder.alphabeticallySortedWordsIds());
+        Assert.assertEquals(Lists.newArrayList(3,0,2,1), list );
+
+        list = Lists.newArrayList(builder.alphabeticallySortedWordsIds(new Locale("tr")));
+        Assert.assertEquals(Lists.newArrayList(3,1,0,2), list );
+
+        LmVocabulary vocab = builder.generate();
+        Assert.assertEquals(7, vocab.size());
+    }
 }

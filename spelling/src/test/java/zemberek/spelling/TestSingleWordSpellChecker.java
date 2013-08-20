@@ -1,18 +1,24 @@
 package zemberek.spelling;
 
+import com.google.common.base.Charsets;
+import com.google.common.base.Stopwatch;
+import com.google.common.io.Resources;
 import org.junit.Assert;
 import org.junit.Test;
 import zemberek.core.DoubleValueSet;
 import zemberek.core.logging.Log;
 
+import java.io.IOException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class TestSingleWordSpellChecker {
 
     @Test
-    public void singleWordDictionaryTest() {
+    public void simpleDecodeTest() {
         SingleWordSpellChecker spellChecker = new SingleWordSpellChecker(1);
         String vocabulary = "elma";
         spellChecker.addWord(vocabulary);
@@ -25,18 +31,48 @@ public class TestSingleWordSpellChecker {
     }
 
     @Test
-    public void singleWordDictionaryTest2() {
+    public void multiWordDecodeTest() {
         Log.setDebug();
         SingleWordSpellChecker spellChecker = new SingleWordSpellChecker(1);
         spellChecker.addWords("çak", "sak", "saka", "bak", "çaka", "çakal", "sakal");
-        DoubleValueSet<String> res1 = spellChecker.decode("çak");
-        Assert.assertEquals(4, res1.size());
-        assertContainsAll(res1, "çak", "sak", "bak", "çaka");
+
+        DoubleValueSet<String> result = spellChecker.decode("çak");
+
+        Assert.assertEquals(4, result.size());
+        assertContainsAll(result, "çak", "sak", "bak", "çaka");
+
         double delta = 0.0001;
-        Assert.assertEquals(0, res1.get("çak"), delta);
-        Assert.assertEquals(1, res1.get("sak"), delta);
-        Assert.assertEquals(1, res1.get("bak"), delta);
-        Assert.assertEquals(1, res1.get("çaka"), delta);
+        Assert.assertEquals(0, result.get("çak"), delta);
+        Assert.assertEquals(1, result.get("sak"), delta);
+        Assert.assertEquals(1, result.get("bak"), delta);
+        Assert.assertEquals(1, result.get("çaka"), delta);
+
+        result = spellChecker.decode("çaka");
+
+        Assert.assertEquals(4, result.size());
+        assertContainsAll(result, "çaka", "saka", "çakal", "çak");
+
+        Assert.assertEquals(0, result.get("çaka"), delta);
+        Assert.assertEquals(1, result.get("saka"), delta);
+        Assert.assertEquals(1, result.get("çakal"), delta);
+        Assert.assertEquals(1, result.get("çak"), delta);
+
+        Log.setInfo();
+    }
+
+    @Test
+    public void performanceTest() throws IOException {
+        List<String> words = Resources.readLines(Resources.getResource("10000"), Charsets.UTF_8);
+        SingleWordSpellChecker spellChecker = new SingleWordSpellChecker();
+        spellChecker.buildDictionary(words);
+        Stopwatch sw = new Stopwatch().start();
+        int solutionCount = 0;
+        for (String word : words) {
+            DoubleValueSet<String> result = spellChecker.decode(word);
+            solutionCount += result.size();
+        }
+        Log.info("Elapsed: " + sw.elapsed(TimeUnit.MILLISECONDS));
+        Log.info("Solution count:" + solutionCount);
     }
 
     void assertContainsAll(DoubleValueSet<String> set, String... words) {
@@ -77,7 +113,9 @@ public class TestSingleWordSpellChecker {
 
     @Test
     public void nearKeyCheck() {
-        SingleWordSpellChecker spellChecker = new SingleWordSpellChecker(1, true);
+        SingleWordSpellChecker spellChecker = new SingleWordSpellChecker(
+                1,
+                SingleWordSpellChecker.TURKISH_Q_NEAR_KEY_MAP);
         String vocabulary = "elma";
         spellChecker.addWord(vocabulary);
         Assert.assertTrue(spellChecker.decode(vocabulary).contains(vocabulary));
